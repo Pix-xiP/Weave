@@ -25,6 +25,7 @@ type Engine struct {
 	bus   *events.Bus
 	L     *lua.LState
 	tasks map[string]*lua.LFunction
+	cfg   Config
 }
 
 func New(opts Options) *Engine {
@@ -107,9 +108,14 @@ func (e *Engine) registerDSL() {
 func (e *Engine) Load() error {
 	// reset tasks for idempotent laods
 	e.tasks = make(map[string]*lua.LFunction)
+	e.cfg = Config{}
 
 	if err := e.L.DoFile(e.opt.File); err != nil {
 		return fmt.Errorf("failure executing %s: %w", e.opt.File, err)
+	}
+
+	if err := e.loadConfig(); err != nil {
+		return fmt.Errorf("config error: %w", err)
 	}
 
 	return nil
@@ -133,6 +139,7 @@ func (e *Engine) Run(name string) error {
 	}
 
 	ctx := NewCtx(e.L, e.bus)
+	ctx.cfg = e.cfg
 
 	// call fn(ctx)
 	if err := e.L.CallByParam(lua.P{

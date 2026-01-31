@@ -4,9 +4,10 @@ package engine
 import (
 	"bytes"
 	"os/exec"
-	"runtime"
+	"strings"
 	"time"
 
+	"github.com/charmbracelet/log"
 	lua "github.com/yuin/gopher-lua"
 
 	"github.com/pix-xip/weave/internal/events"
@@ -17,6 +18,7 @@ type Ctx struct {
 	ud *lua.LUserData
 
 	bus events.Emitter
+	cfg Config
 }
 
 func NewCtx(L *lua.LState, bus events.Emitter) *Ctx {
@@ -42,7 +44,45 @@ func NewCtx(L *lua.LState, bus events.Emitter) *Ctx {
 // ctx:run("echo hi") -> { ok=true, code=0, out="...", err="..." }
 func (c *Ctx) luaRun(L *lua.LState) int {
 	// method call: arg1 is userdata, arg2 is first user arg
-	cmdstr := L.CheckString(2)
+	top := L.GetTop()
+	if top < 2 || top > 3 {
+		L.ArgError(2, "expected ctx:run(cmd) or ctx:run(host, cmd)")
+		return 1
+	}
+
+	var cmdstr string
+
+	hostname := ""
+
+	if top == 2 {
+		cmdstr = L.CheckString(2)
+	} else {
+		hostname = L.CheckString(2)
+		cmdstr = L.CheckString(3)
+	}
+
+	var cmd *exec.Cmd
+
+	// use a shell for convenience initially
+	if hostname == "" {
+		// support only those with 'sh'
+		cmd = exec.Command("sh", "-lc", cmdstr)
+	} else {
+		host, ok := c.cfg.Hosts[hostname]
+		if !ok {
+			L.ArgError(2, "unknown host: "+hostname)
+			return 1
+		}
+
+		target := host.Addr
+		if host.User != "" {
+			target = host.User + "@" + host.Addr
+		}
+
+		remoteCmd := "sh -lc " + shellQuotePosix(cmdstr)
+		log.Debugf("executing: ssh %s -- %s", target, remoteCmd)
+		cmd = exec.Command("ssh", target, "--", remoteCmd)
+	}
 
 	start := time.Now()
 
@@ -50,19 +90,8 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 		Type:   events.OpStart,
 		Time:   time.Now(),
 		Task:   "run",
-		Fields: map[string]any{"op": "run", "host": "local", "cmd": cmdstr},
+		Fields: map[string]any{"op": "run", "host": hostname, "cmd": cmdstr},
 	})
-
-	var cmd *exec.Cmd
-
-	// use a shell for convenience initially
-
-	if runtime.GOOS == "windows" {
-		cmd = exec.Command("cmd", "/C", cmdstr)
-	} else {
-		// hotpath
-		cmd = exec.Command("sh", "-lc", cmdstr)
-	}
 
 	var stdout, stderr bytes.Buffer
 
@@ -88,7 +117,7 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 		Task: "run",
 		Fields: map[string]any{
 			"op":          "run",
-			"host":        "local",
+			"host":        hostname,
 			"ok":          err == nil,
 			"code":        code,
 			"duration_ms": dur.Milliseconds(),
@@ -105,6 +134,14 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 	L.Push(res)
 
 	return 1
+}
+
+func shellQuotePosix(s string) string {
+	if s == "" {
+		return "''"
+	}
+
+	return "'" + strings.ReplaceAll(s, "'", `'\''`) + "'"
 }
 
 func (c *Ctx) luaLog(L *lua.LState) int {
@@ -135,5 +172,6 @@ func (c *Ctx) luaLog(L *lua.LState) int {
 			"attrs": attrs,
 		},
 	})
+
 	return 0
 }

@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"os"
 
+	"github.com/charmbracelet/log"
 	logger "github.com/charmbracelet/log"
 	"github.com/pix-xip/go-command"
 
@@ -37,6 +38,7 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 	logLevel := command.Lookup[string](fs, "log-level")
 	logFormat := command.Lookup[string](fs, "log-format")
 	quiet := command.Lookup[bool](fs, "quiet")
+	debug := command.Lookup[bool](fs, "debug")
 
 	level, err := logger.ParseLevel(logLevel)
 	if err != nil {
@@ -52,6 +54,10 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 		format = logger.TextFormatter
 	default:
 		return fmt.Errorf("invalid log format: %s", logFormat)
+	}
+
+	if debug {
+		level = log.DebugLevel
 	}
 
 	eng := engine.New(engine.Options{
