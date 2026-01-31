@@ -41,3 +41,12 @@ task("remote", function(ctx)
 	print(r.ok, r.err, r.code)
 	print(r.out)
 end)
+
+task("sync-test", function(ctx)
+	ctx:log("info", "running sync test command", { host = config.hosts.server.addr })
+
+	local r = ctx:sync("./syncfolder", "server:/home/pix/syncfolder")
+	print("====================")
+	print("ok:", r.ok, "code:", r.code, "err:", r.err)
+	print("out:", r.out)
+end)
