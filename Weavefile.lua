@@ -45,7 +45,7 @@ end)
 
 task("sync-test", function(ctx)
 	ctx:log("info", "running sync test command", { host = config.hosts.server.addr })
-	local r = ctx:sync("./syncfolder/", "server:/home/pix/syncfolder/")
+	local r = ctx:sync("./testfiles/syncfolder/", "server:/home/pix/AdeptusCustodes/Lunar/Weave/syncfolder/")
 	if not r.ok then
 		ctx:log("error", "sync failed", { err = r.err })
 		return
@@ -54,7 +54,8 @@ end)
 
 task("fetch-test", function(ctx)
 	ctx:log("info", "running fetch test command", { host = config.hosts.server.addr })
-	local r = ctx:fetch("server:/home/pix/syncfolder/", "./fetchfolder/")
+	local r =
+		ctx:fetch("server:/home/pix/AdeptusCustodes/Lunar/Weave/testfiles/syncfolder/", "./testfiles/fetchfolder/")
 	if not r.ok then
 		ctx:log("error", "fetch failed", { err = r.err })
 		return
