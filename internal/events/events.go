@@ -1,3 +1,4 @@
+// Package events provides the Event types and Enumss for the Bus inside the Weave engine
 package events
 
 import "time"

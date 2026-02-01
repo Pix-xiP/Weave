@@ -3,6 +3,8 @@ package engine
 
 import (
 	"bytes"
+	"context"
+	"errors"
 	"os"
 	"os/exec"
 	"path/filepath"
@@ -70,7 +72,7 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 	// use a shell for convenience initially
 	if hostname == "" {
 		// support only those with 'sh'
-		cmd = exec.Command("sh", "-lc", cmdstr)
+		cmd = exec.CommandContext(context.Background(), "sh", "-lc", cmdstr)
 	} else {
 		host, ok := c.cfg.Hosts[hostname]
 		if !ok {
@@ -84,7 +86,7 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 		}
 
 		remoteCmd := "sh -lc " + shellQuotePosix(cmdstr)
-		cmd = exec.Command("ssh", target, "--", remoteCmd)
+		cmd = exec.CommandContext(context.Background(), "ssh", target, "--", remoteCmd)
 	}
 
 	start := time.Now()
@@ -106,7 +108,8 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 
 	if err != nil {
 		// best-effort exit code extraction:
-		if ee, ok := err.(*exec.ExitError); ok {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		} else {
 			code = 1
@@ -207,8 +210,6 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 		return c.luaRsyncError(L, err)
 	}
 
-	resolvedSrc = normalizeRsyncSource(op, src, resolvedSrc)
-
 	if err := ensureLocalDest(resolvedDst); err != nil {
 		return c.luaRsyncError(L, err)
 	}
@@ -222,7 +223,7 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 	})
 
 	log.Debugf("executing: rsync -az --delete %s %s", resolvedSrc, resolvedDst)
-	cmd := exec.Command("rsync", "-az", "--delete", resolvedSrc, resolvedDst)
+	cmd := exec.CommandContext(context.Background(), "rsync", "-az", "--delete", resolvedSrc, resolvedDst)
 
 	var stdout, stderr bytes.Buffer
 
@@ -233,7 +234,8 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 	code := 0
 
 	if err != nil {
-		if ee, ok := err.(*exec.ExitError); ok {
+		var ee *exec.ExitError
+		if errors.As(err, &ee) {
 			code = ee.ExitCode()
 		} else {
 			code = 1
@@ -339,25 +341,4 @@ func splitHostPath(path string) (string, string, bool) {
 	}
 
 	return parts[0], parts[1], true
-}
-
-func normalizeRsyncSource(op, original, resolved string) string {
-	if op != "sync" {
-		return resolved
-	}
-
-	if _, _, ok := splitHostPath(original); ok {
-		return resolved
-	}
-
-	info, err := os.Stat(original)
-	if err != nil || !info.IsDir() {
-		return resolved
-	}
-
-	if strings.HasSuffix(resolved, "/") {
-		return resolved
-	}
-
-	return resolved + "/"
 }

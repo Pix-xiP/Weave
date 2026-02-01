@@ -3,9 +3,9 @@ module github.com/pix-xip/weave
 go 1.25.6
 
 require (
+	github.com/charmbracelet/log v0.4.2
 	github.com/pix-xip/go-command v0.1.1
 	github.com/yuin/gopher-lua v1.1.1
-	github.com/charmbracelet/log v0.4.2
 )
 
 require (

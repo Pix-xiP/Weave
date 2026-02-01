@@ -16,6 +16,13 @@ linters:
         - -ST1003
         - -ST1020
         - -ST1021
+    gosec:
+      excludes:
+        - G204
+    gocritic:
+      enable-all: true
+      disabled-checks:
+        - captLocal
 
   disable:
     - depguard

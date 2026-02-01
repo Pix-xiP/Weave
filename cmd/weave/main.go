@@ -8,7 +8,6 @@ import (
 	"os"
 
 	"github.com/charmbracelet/log"
-	logger "github.com/charmbracelet/log"
 	"github.com/pix-xip/go-command"
 
 	"github.com/pix-xip/weave/internal/engine"
@@ -40,18 +39,18 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 	quiet := command.Lookup[bool](fs, "quiet")
 	debug := command.Lookup[bool](fs, "debug")
 
-	level, err := logger.ParseLevel(logLevel)
+	level, err := log.ParseLevel(logLevel)
 	if err != nil {
 		return fmt.Errorf("invalid log level: %w", err)
 	}
 
-	var format logger.Formatter
+	var format log.Formatter
 
 	switch logFormat {
 	case "json":
-		format = logger.JSONFormatter
+		format = log.JSONFormatter
 	case "text":
-		format = logger.TextFormatter
+		format = log.TextFormatter
 	default:
 		return fmt.Errorf("invalid log format: %s", logFormat)
 	}
