@@ -1,3 +1,5 @@
 ./weave
 syncfolder
 fetchfolder
+weave
+!cmd/weave
