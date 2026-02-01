@@ -37,23 +37,26 @@ end)
 task("remote", function(ctx)
 	ctx:log("info", "running remote command", { host = config.hosts.server.addr })
 	local r = ctx:run("server", "ls -lah /home/pix/AdeptusCustodes/Lunar/Weave")
-	print("====================")
-	print(r.ok, r.err, r.code)
-	print(r.out)
+	if not r.ok then
+		ctx:log("error", "remote command failed", { err = r.err })
+		return
+	end
 end)
 
 task("sync-test", function(ctx)
 	ctx:log("info", "running sync test command", { host = config.hosts.server.addr })
 	local r = ctx:sync("./syncfolder/", "server:/home/pix/syncfolder/")
-	print("====================")
-	print(r.ok, r.err, r.code)
-	print(r.out)
+	if not r.ok then
+		ctx:log("error", "sync failed", { err = r.err })
+		return
+	end
 end)
 
 task("fetch-test", function(ctx)
 	ctx:log("info", "running fetch test command", { host = config.hosts.server.addr })
 	local r = ctx:fetch("server:/home/pix/syncfolder/", "./fetchfolder/")
-	print("====================")
-	print(r.ok, r.err, r.code)
-	print(r.out)
+	if not r.ok then
+		ctx:log("error", "fetch failed", { err = r.err })
+		return
+	end
 end)
