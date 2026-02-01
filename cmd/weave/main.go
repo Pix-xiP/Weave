@@ -19,6 +19,7 @@ func main() {
 			f.String("f", "Weavefile.lua", "path to Weavefile")
 			f.String("log-level", "info", "set the log level [debug|info|warn|error]")
 			f.String("log-format", "json", "set the log format [json|text]")
+			f.Bool("dry-run", false, "emit events without executing operations")
 
 			f.Bool("quiet", false, "disable all output")
 			f.Bool("debug", false, "enable debug mode")
@@ -37,6 +38,7 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 	logLevel := command.Lookup[string](fs, "log-level")
 	logFormat := command.Lookup[string](fs, "log-format")
 	quiet := command.Lookup[bool](fs, "quiet")
+	dryRun := command.Lookup[bool](fs, "dry-run")
 	debug := command.Lookup[bool](fs, "debug")
 
 	level, err := log.ParseLevel(logLevel)
@@ -64,6 +66,7 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 		LogLevel:  level,
 		LogFormat: format,
 		Quiet:     quiet,
+		DryRun:    dryRun,
 	})
 
 	if len(args) == 0 {

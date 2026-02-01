@@ -21,8 +21,9 @@ type Ctx struct {
 	L  *lua.LState
 	ud *lua.LUserData
 
-	bus events.Emitter
-	cfg Config
+	bus    events.Emitter
+	cfg    Config
+	dryRun bool
 }
 
 func NewCtx(L *lua.LState, bus events.Emitter) *Ctx {
@@ -95,8 +96,34 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 		Type:   events.OpStart,
 		Time:   time.Now(),
 		Task:   "run",
-		Fields: map[string]any{"op": "run", "host": hostname, "cmd": cmdstr},
+		Fields: map[string]any{"op": "run", "host": hostname, "cmd": cmdstr, "dry_run": c.dryRun},
 	})
+
+	if c.dryRun {
+		c.bus.Emit(events.Event{
+			Type: events.OpEnd,
+			Time: time.Now(),
+			Task: "run",
+			Fields: map[string]any{
+				"op":          "run",
+				"host":        hostname,
+				"ok":          true,
+				"code":        0,
+				"duration_ms": time.Since(start).Milliseconds(),
+				"dry_run":     true,
+			},
+		})
+
+		res := L.NewTable()
+
+		L.SetField(res, "ok", lua.LBool(true))
+		L.SetField(res, "code", lua.LNumber(0))
+		L.SetField(res, "out", lua.LString(""))
+		L.SetField(res, "err", lua.LString(""))
+		L.Push(res)
+
+		return 1
+	}
 
 	var stdout, stderr bytes.Buffer
 
@@ -129,6 +156,7 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 			"duration_ms": dur.Milliseconds(),
 			"stdout_len":  len(stdout.String()),
 			"stderr_len":  len(stderr.String()),
+			"dry_run":     false,
 		},
 	})
 
@@ -210,17 +238,42 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 		return c.luaRsyncError(L, err)
 	}
 
-	if err := ensureLocalDest(resolvedDst); err != nil {
-		return c.luaRsyncError(L, err)
-	}
-
 	start := time.Now()
 	c.bus.Emit(events.Event{
 		Type:   events.OpStart,
 		Time:   time.Now(),
 		Task:   op,
-		Fields: map[string]any{"op": op, "src": src, "dst": dst},
+		Fields: map[string]any{"op": op, "src": src, "dst": dst, "dry_run": c.dryRun},
 	})
+
+	if c.dryRun {
+		c.bus.Emit(events.Event{
+			Type: events.OpEnd,
+			Time: time.Now(),
+			Task: op,
+			Fields: map[string]any{
+				"op":          op,
+				"ok":          true,
+				"code":        0,
+				"duration_ms": time.Since(start).Milliseconds(),
+				"dry_run":     true,
+			},
+		})
+
+		res := L.NewTable()
+
+		L.SetField(res, "ok", lua.LBool(true))
+		L.SetField(res, "code", lua.LNumber(0))
+		L.SetField(res, "out", lua.LString(""))
+		L.SetField(res, "err", lua.LString(""))
+		L.Push(res)
+
+		return 1
+	}
+
+	if err := ensureLocalDest(resolvedDst); err != nil {
+		return c.luaRsyncError(L, err)
+	}
 
 	log.Debugf("executing: rsync -az --delete %s %s", resolvedSrc, resolvedDst)
 	cmd := exec.CommandContext(context.Background(), "rsync", "-az", "--delete", resolvedSrc, resolvedDst)
@@ -252,6 +305,7 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 			"ok":          err == nil,
 			"code":        code,
 			"duration_ms": dur.Milliseconds(),
+			"dry_run":     false,
 		},
 	})
 

@@ -18,6 +18,7 @@ type Options struct {
 	LogFormat log.Formatter // "json" or "text"
 	LogLevel  log.Level     // "debug", "info", "warn", "error"
 	Quiet     bool
+	DryRun    bool
 }
 
 type Engine struct {
@@ -140,6 +141,7 @@ func (e *Engine) Run(name string) error {
 
 	ctx := NewCtx(e.L, e.bus)
 	ctx.cfg = e.cfg
+	ctx.dryRun = e.opt.DryRun
 
 	// call fn(ctx)
 	if err := e.L.CallByParam(lua.P{
