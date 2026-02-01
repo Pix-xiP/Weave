@@ -52,10 +52,9 @@ task("sync-test", function(ctx)
 	end
 end)
 
-task("fetch-test", function(ctx)
+task("fetch-test", { depends = { "sync-test" } }, function(ctx)
 	ctx:log("info", "running fetch test command", { host = config.hosts.server.addr })
-	local r =
-		ctx:fetch("server:/home/pix/AdeptusCustodes/Lunar/Weave/testfiles/syncfolder/", "./testfiles/fetchfolder/")
+	local r = ctx:fetch("server:/home/pix/AdeptusCustodes/Lunar/Weave/syncfolder/", "./testfiles/fetchfolder/")
 	if not r.ok then
 		ctx:log("error", "fetch failed", { err = r.err })
 		return
