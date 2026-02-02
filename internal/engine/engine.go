@@ -15,11 +15,12 @@ import (
 )
 
 type Options struct {
-	File      string
-	LogFormat log.Formatter // "json" or "text"
-	LogLevel  log.Level     // "debug", "info", "warn", "error"
-	Quiet     bool
-	DryRun    bool
+	File       string
+	LogFormat  log.Formatter // "json" or "text"
+	LogLevel   log.Level     // "debug", "info", "warn", "error"
+	Quiet      bool
+	DryRun     bool
+	MaxWorkers int
 }
 
 type Engine struct {
@@ -67,13 +68,13 @@ func (e *Engine) subscribe() {
 	e.bus.Subscribe(func(e events.Event) {
 		switch e.Type {
 		case events.TaskStart:
-			log.Info("task start", "task", e.Task)
+			log.Debug("task start", "task", e.Task)
 		case events.TaskEnd:
-			log.Info("task end", "task", e.Task, "ok", e.Fields["ok"])
+			log.Debug("task end", "task", e.Task, "ok", e.Fields["ok"])
 		case events.OpStart:
-			log.Info("op start", "task", e.Task, "op", e.Fields["op"], "host", e.Fields["host"])
+			log.Debug("op start", "task", e.Task, "op", e.Fields["op"], "host", e.Fields["host"])
 		case events.OpEnd:
-			log.Info("op end",
+			log.Debug("op end",
 				"task", e.Task,
 				"op", e.Fields["op"],
 				"ok", e.Fields["ok"],
@@ -98,11 +99,14 @@ func (e *Engine) subscribe() {
 }
 
 func (e *Engine) registerDSL() {
-	e.L.SetGlobal("task", e.L.NewFunction(func(L *lua.LState) int {
+	registerDSLWithTasks(e.L, e.tasks)
+}
+
+func registerDSLWithTasks(L *lua.LState, tasks map[string]taskDef) {
+	L.SetGlobal("task", L.NewFunction(func(L *lua.LState) int {
 		name := L.CheckString(1)
 
 		var opts *lua.LTable
-
 		var fn *lua.LFunction
 
 		switch L.GetTop() {
@@ -127,7 +131,7 @@ func (e *Engine) registerDSL() {
 			return 1
 		}
 
-		e.tasks[name] = taskDef{fn: fn, deps: deps}
+		tasks[name] = taskDef{fn: fn, deps: deps}
 
 		return 0
 	}))
@@ -137,14 +141,17 @@ func (e *Engine) Load() error {
 	// reset tasks for idempotent laods
 	e.tasks = make(map[string]taskDef)
 	e.cfg = Config{}
+	registerDSLWithTasks(e.L, e.tasks)
 
 	if err := e.L.DoFile(e.opt.File); err != nil {
 		return fmt.Errorf("failure executing %s: %w", e.opt.File, err)
 	}
 
-	if err := e.loadConfig(); err != nil {
+	cfg, err := loadConfigFrom(e.L)
+	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
+	e.cfg = cfg
 
 	return nil
 }
@@ -161,68 +168,96 @@ func (e *Engine) TaskNames() []string {
 }
 
 func (e *Engine) Run(name string) error {
-	order, err := e.taskOrder(name)
+	graph, err := e.depsGraph(name)
 	if err != nil {
 		return err
 	}
 
-	for _, taskName := range order {
-		def := e.tasks[taskName]
-		ctx := NewCtx(e.L, e.bus)
-		ctx.cfg = e.cfg
-		ctx.dryRun = e.opt.DryRun
+	runner := engineRunner{engine: e}
 
-		start := time.Now()
-		e.bus.Emit(events.Event{
-			Type: events.TaskStart,
-			Time: time.Now(),
-			Task: taskName,
-			Fields: map[string]any{
-				"task": taskName,
-			},
-		})
-
-		err := e.L.CallByParam(lua.P{
-			Fn:      def.fn,
-			NRet:    0,
-			Protect: true,
-		}, ctx.ud)
-
-		e.bus.Emit(events.Event{
-			Type: events.TaskEnd,
-			Time: time.Now(),
-			Task: taskName,
-			Fields: map[string]any{
-				"task":        taskName,
-				"ok":          err == nil,
-				"duration_ms": time.Since(start).Milliseconds(),
-			},
-		})
-
-		if err != nil {
-			return err
-		}
+	maxWorkers := e.opt.MaxWorkers
+	if maxWorkers <= 0 {
+		maxWorkers = 1
 	}
 
-	return nil
+	return RunGraphParallel(runner, graph, maxWorkers)
 }
 
-func (e *Engine) taskOrder(name string) ([]string, error) {
-	if _, ok := e.tasks[name]; !ok {
-		return nil, fmt.Errorf("unknown task %q", name)
+type engineRunner struct {
+	engine *Engine
+}
+
+func (r engineRunner) Run(name TaskName) error {
+	taskName := string(name)
+	return r.engine.runTaskIsolated(taskName)
+}
+
+func (e *Engine) runTaskIsolated(taskName string) error {
+	L := lua.NewState()
+	defer L.Close()
+
+	tasks := make(map[string]taskDef)
+	registerDSLWithTasks(L, tasks)
+
+	if err := L.DoFile(e.opt.File); err != nil {
+		return fmt.Errorf("failure executing %s: %w", e.opt.File, err)
 	}
 
+	cfg, err := loadConfigFrom(L)
+	if err != nil {
+		return fmt.Errorf("config error: %w", err)
+	}
+
+	def, ok := tasks[taskName]
+	if !ok {
+		return fmt.Errorf("unknown task %q", taskName)
+	}
+
+	ctx := NewCtx(L, e.bus)
+	ctx.cfg = cfg
+	ctx.dryRun = e.opt.DryRun
+
+	start := time.Now()
+	e.bus.Emit(events.Event{
+		Type: events.TaskStart,
+		Time: time.Now(),
+		Task: taskName,
+		Fields: map[string]any{
+			"task": taskName,
+		},
+	})
+
+	err = L.CallByParam(lua.P{
+		Fn:      def.fn,
+		NRet:    0,
+		Protect: true,
+	}, ctx.ud)
+
+	e.bus.Emit(events.Event{
+		Type: events.TaskEnd,
+		Time: time.Now(),
+		Task: taskName,
+		Fields: map[string]any{
+			"task":        taskName,
+			"ok":          err == nil,
+			"duration_ms": time.Since(start).Milliseconds(),
+		},
+	})
+
+	return err
+}
+
+func (e *Engine) depsGraph(root string) (map[TaskName][]TaskName, error) {
+	if _, ok := e.tasks[root]; !ok {
+		return nil, fmt.Errorf("unknown task %q", root)
+	}
+
+	graph := map[TaskName][]TaskName{}
 	visited := map[string]bool{}
-	inStack := map[string]bool{}
-	order := []string{}
 
 	var visit func(string) error
 
 	visit = func(taskName string) error {
-		if inStack[taskName] {
-			return fmt.Errorf("dependency cycle detected at %q", taskName)
-		}
-
 		if visited[taskName] {
 			return nil
 		}
@@ -232,27 +267,30 @@ func (e *Engine) taskOrder(name string) ([]string, error) {
 			return fmt.Errorf("unknown dependency %q", taskName)
 		}
 
-		inStack[taskName] = true
+		visited[taskName] = true
 
+		deps := make([]TaskName, 0, len(def.deps))
 		for _, dep := range def.deps {
+			if _, ok := e.tasks[dep]; !ok {
+				return fmt.Errorf("unknown dependency %q", dep)
+			}
+
+			deps = append(deps, TaskName(dep))
 			if err := visit(dep); err != nil {
 				return err
 			}
 		}
 
-		inStack[taskName] = false
-
-		visited[taskName] = true
-		order = append(order, taskName)
+		graph[TaskName(taskName)] = deps
 
 		return nil
 	}
 
-	if err := visit(name); err != nil {
+	if err := visit(root); err != nil {
 		return nil, err
 	}
 
-	return order, nil
+	return graph, nil
 }
 
 func parseTaskDeps(opts *lua.LTable) ([]string, error) {

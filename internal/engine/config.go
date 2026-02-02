@@ -15,27 +15,28 @@ type Config struct {
 	Hosts map[string]HostConfig
 }
 
-func (e *Engine) loadConfig() error {
-	lv := e.L.GetGlobal("config")
+func loadConfigFrom(L *lua.LState) (Config, error) {
+	cfg := Config{}
+	lv := L.GetGlobal("config")
 	if lv == lua.LNil {
-		return nil
+		return cfg, nil
 	}
 
 	tbl, ok := lv.(*lua.LTable)
 	if !ok {
-		return errors.New("config must be a table")
+		return cfg, errors.New("config must be a table")
 	}
 
 	hosts, err := parseHosts(tbl)
 	if err != nil {
-		return err
+		return cfg, err
 	}
 
 	if len(hosts) > 0 {
-		e.cfg.Hosts = hosts
+		cfg.Hosts = hosts
 	}
 
-	return nil
+	return cfg, nil
 }
 
 func parseHosts(cfg *lua.LTable) (map[string]HostConfig, error) {

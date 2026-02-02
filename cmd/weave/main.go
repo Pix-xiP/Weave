@@ -20,6 +20,7 @@ func main() {
 			f.String("log-level", "info", "set the log level [debug|info|warn|error]")
 			f.String("log-format", "json", "set the log format [json|text]")
 			f.Bool("dry-run", false, "emit events without executing operations")
+			f.Int("workers", 2, "max parallel tasks to run")
 
 			f.Bool("quiet", false, "disable all output")
 			f.Bool("debug", false, "enable debug mode")
@@ -39,6 +40,7 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 	logFormat := command.Lookup[string](fs, "log-format")
 	quiet := command.Lookup[bool](fs, "quiet")
 	dryRun := command.Lookup[bool](fs, "dry-run")
+	workers := command.Lookup[int](fs, "workers")
 	debug := command.Lookup[bool](fs, "debug")
 
 	level, err := log.ParseLevel(logLevel)
@@ -62,11 +64,12 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 	}
 
 	eng := engine.New(engine.Options{
-		File:      file,
-		LogLevel:  level,
-		LogFormat: format,
-		Quiet:     quiet,
-		DryRun:    dryRun,
+		File:       file,
+		LogLevel:   level,
+		LogFormat:  format,
+		Quiet:      quiet,
+		DryRun:     dryRun,
+		MaxWorkers: workers,
 	})
 
 	if len(args) == 0 {
