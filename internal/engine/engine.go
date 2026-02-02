@@ -106,8 +106,10 @@ func registerDSLWithTasks(L *lua.LState, tasks map[string]taskDef) {
 	L.SetGlobal("task", L.NewFunction(func(L *lua.LState) int {
 		name := L.CheckString(1)
 
-		var opts *lua.LTable
-		var fn *lua.LFunction
+		var (
+			opts *lua.LTable
+			fn   *lua.LFunction
+		)
 
 		switch L.GetTop() {
 		case 2:
@@ -151,6 +153,7 @@ func (e *Engine) Load() error {
 	if err != nil {
 		return fmt.Errorf("config error: %w", err)
 	}
+
 	e.cfg = cfg
 
 	return nil
