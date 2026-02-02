@@ -34,29 +34,6 @@ task("hello", function(ctx)
 	end
 end)
 
-task("remote", function(ctx)
-	ctx:log("info", "running remote command", { host = config.hosts.server.addr })
-	local r = ctx:run("server", "ls -lah /home/pix/AdeptusCustodes/Lunar/Weave")
-	if not r.ok then
-		ctx:log("error", "remote command failed", { err = r.err })
-		return
-	end
-end)
-
-task("sync-test", function(ctx)
-	ctx:log("info", "running sync test command", { host = config.hosts.server.addr })
-	local r = ctx:sync("./testfiles/syncfolder/", "server:/home/pix/AdeptusCustodes/Lunar/Weave/syncfolder/")
-	if not r.ok then
-		ctx:log("error", "sync failed", { err = r.err })
-		return
-	end
-end)
-
-task("fetch-test", { depends = { "sync-test" } }, function(ctx)
-	ctx:log("info", "running fetch test command", { host = config.hosts.server.addr })
-	local r = ctx:fetch("server:/home/pix/AdeptusCustodes/Lunar/Weave/syncfolder/", "./testfiles/fetchfolder/")
-	if not r.ok then
-		ctx:log("error", "fetch failed", { err = r.err })
-		return
-	end
+task("build", function(ctx)
+	ctx:run("go build -o weave ./cmd/weave/main.go")
 end)
