@@ -58,7 +58,7 @@ end)
 
 Tasks can be run in parallel, using 2 workers to do this be default.
 
-Examples of basic task operations can be found in the `./testfiles` directory
+Examples of basic task operations can be found in the `./testfiles` directory.
 
 ## ctx Primitives
 
@@ -93,18 +93,11 @@ config = {
 
 These aliases work with `ctx:run("server", ...)` and `server:/path` in `ctx:sync` / `ctx:fetch`.
 
-## Flags
-
-```bash
-weave --log-format text run hello
-weave --dry-run run hello
-weave --workers 4 run echo
-```
-
 ## Events
 
-Weave emits structured events for tasks and operations:
+Weave emits structured events for tasks and operations when run in debug mode:
 
 - `task_start` / `task_end`
 - `op_start` / `op_end`
-- `message` (from `ctx:log`)
+
+There are also `message` events from `ctx:log` calls down in the lua.
