@@ -22,6 +22,8 @@ end)
 weave run hello
 ```
 
+List available tasks:
+
 ```bash
 weave tasks
 ```
@@ -31,8 +33,6 @@ weave tasks
 ```bash
 go build -o weave ./cmd/weave
 ```
-
-List available tasks:
 
 ## Task API
 
@@ -56,7 +56,9 @@ task("build", { depends = { "sync" } }, function(ctx)
 end)
 ```
 
-When you run a task, Weave executes all dependencies first, in order, and stops on the first failure.
+Tasks can be run in parallel, using 2 workers to do this be default.
+
+Examples of basic task operations can be found in the `./testfiles` directory
 
 ## ctx Primitives
 
@@ -96,6 +98,7 @@ These aliases work with `ctx:run("server", ...)` and `server:/path` in `ctx:sync
 ```bash
 weave --log-format text run hello
 weave --dry-run run hello
+weave --workers 4 run echo
 ```
 
 ## Events
