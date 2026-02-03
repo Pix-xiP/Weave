@@ -13,6 +13,8 @@ import (
 	"github.com/pix-xip/weave/internal/engine"
 )
 
+var Version string
+
 func main() {
 	r := command.Root().Help("Weave is a tool for executing Weavefile's").
 		Flags(func(f *flag.FlagSet) {
@@ -28,49 +30,57 @@ func main() {
 
 	r.Action(Start)
 
+	r.SubCommand("version").Help("Prints the version").
+		Action(func(ctx context.Context, fs *flag.FlagSet, args []string) error {
+			fmt.Println("Weave version", Version)
+			return nil
+		})
+
 	if err := r.Execute(context.Background()); err != nil {
 		fmt.Fprintln(os.Stderr, err)
 		os.Exit(1)
 	}
 }
 
-func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
-	file := command.Lookup[string](fs, "f")
-	logLevel := command.Lookup[string](fs, "log-level")
-	logFormat := command.Lookup[string](fs, "log-format")
-	quiet := command.Lookup[bool](fs, "quiet")
-	dryRun := command.Lookup[bool](fs, "dry-run")
-	workers := command.Lookup[int](fs, "workers")
-	debug := command.Lookup[bool](fs, "debug")
-
-	level, err := log.ParseLevel(logLevel)
+func makeOpts(fs *flag.FlagSet) (engine.Options, error) {
+	level, err := log.ParseLevel(command.Lookup[string](fs, "log-level"))
 	if err != nil {
-		return fmt.Errorf("invalid log level: %w", err)
+		return engine.Options{}, fmt.Errorf("invalid log level: %w", err)
+	}
+
+	if command.Lookup[bool](fs, "debug") {
+		level = log.DebugLevel
 	}
 
 	var format log.Formatter
 
-	switch logFormat {
+	switch command.Lookup[string](fs, "log-format") {
 	case "json":
 		format = log.JSONFormatter
 	case "text":
 		format = log.TextFormatter
 	default:
-		return fmt.Errorf("invalid log format: %s", logFormat)
+		return engine.Options{}, fmt.Errorf("invalid log format: %s",
+			command.Lookup[string](fs, "log-format"))
 	}
 
-	if debug {
-		level = log.DebugLevel
-	}
-
-	eng := engine.New(engine.Options{
-		File:       file,
+	return engine.Options{
+		File:       command.Lookup[string](fs, "f"),
 		LogLevel:   level,
 		LogFormat:  format,
-		Quiet:      quiet,
-		DryRun:     dryRun,
-		MaxWorkers: workers,
-	})
+		Quiet:      command.Lookup[bool](fs, "quiet"),
+		DryRun:     command.Lookup[bool](fs, "dry-run"),
+		MaxWorkers: command.Lookup[int](fs, "workers"),
+	}, nil
+}
+
+func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
+	opts, err := makeOpts(fs)
+	if err != nil {
+		return err
+	}
+
+	eng := engine.New(opts)
 
 	if len(args) == 0 {
 		fs.Usage()
