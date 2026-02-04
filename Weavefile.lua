@@ -1,6 +1,7 @@
 -- This is a Weavefile for use with the `weave` tool.
 task("build", function(ctx)
 	ctx:run("go build -o weave ./cmd/weave/main.go")
+	ctx:notify("Weave Build", "weave has finished running build")
 end)
 
 task("rebuild", function(ctx)
@@ -14,4 +15,6 @@ task("rebuild", function(ctx)
 		ctx:run("rm weave.old")
 		ctx:log("info", "weave rebuilt")
 	end
+
+	ctx:notify("Weave Rebuild", "weave has finished running rebuild")
 end)

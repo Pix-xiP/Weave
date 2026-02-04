@@ -65,19 +65,22 @@ Examples of basic task operations can be found in the `./testfiles` directory.
 Everything runs through the `ctx` object:
 
 ```lua
-ctx:run("go build .")                  -- local
-ctx:run("server", "go build .")        -- remote via ssh
+ctx:run("go build .")                              -- local
+ctx:run("server", "go build .")                    -- remote via ssh
 
 ctx:sync("./", "server:/tmp/proj/")                -- rsync upload
 ctx:fetch("server:/tmp/proj/out.tar.gz", "./out/") -- rsync download
 
 ctx:log("info", "message", { key = "value" })
+ctx:notify("title", "message") 
 ```
 
 **Notes:**
 
 - `ctx:run(host, cmd)` uses `ssh user@addr -- sh -lc '<cmd>'` internally.
 - `ctx:sync` / `ctx:fetch` are rsync-based. Use trailing `/` to copy contents, no trailing `/` to copy the directory itself.
+- `ctx:log` is a wrapper around the structured logging system.
+- `ctx:notify` is a best guess wrapper around the OS's notification system, using `notify-send` on Linux and `osascript -e` on Darwin
 
 ## Host Config (optional)
 

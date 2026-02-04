@@ -37,10 +37,11 @@ func NewCtx(L *lua.LState, bus events.Emitter) *Ctx {
 
 	meta := L.NewTypeMetatable("weave_ctx")
 	L.SetField(meta, "__index", L.SetFuncs(L.NewTable(), map[string]lua.LGFunction{
-		"run":   c.luaRun,
-		"sync":  c.luaSync,
-		"fetch": c.luaFetch,
-		"log":   c.luaLog,
+		"run":    c.luaRun,
+		"sync":   c.luaSync,
+		"fetch":  c.luaFetch,
+		"log":    c.luaLog,
+		"notify": c.luaNotify,
 	}))
 
 	L.SetMetatable(ud, meta)
@@ -207,6 +208,18 @@ func (c *Ctx) luaLog(L *lua.LState) int {
 			"attrs": attrs,
 		},
 	})
+
+	return 0
+}
+
+func (c *Ctx) luaNotify(L *lua.LState) int {
+	title := L.CheckString(2)
+	message := L.CheckString(3)
+
+	if err := notifier().Notify(title, message); err != nil {
+		L.RaiseError("unable to call notifier: %v", err)
+		return 0
+	}
 
 	return 0
 }
