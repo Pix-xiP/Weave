@@ -2,6 +2,8 @@ package engine
 
 import (
 	"errors"
+	"sort"
+	"strings"
 	"sync"
 )
 
@@ -29,6 +31,9 @@ func RunGraphParallel(r Runner, deps map[TaskName][]TaskName, maxWorkers int) er
 			dependents[d] = append(dependents[d], t)
 		}
 	}
+	for d := range dependents {
+		sortTaskNames(dependents[d])
+	}
 
 	for t := range all {
 		if _, ok := depsCount[t]; !ok {
@@ -42,6 +47,7 @@ func RunGraphParallel(r Runner, deps map[TaskName][]TaskName, maxWorkers int) er
 			ready = append(ready, t)
 		}
 	}
+	sortTaskNames(ready)
 
 	processed := 0
 
@@ -62,9 +68,13 @@ func RunGraphParallel(r Runner, deps map[TaskName][]TaskName, maxWorkers int) er
 				}
 			}
 		}
+		sortTaskNames(ready)
 	}
 
 	if processed != len(all) {
+		if cycle := detectCycle(deps); len(cycle) > 0 {
+			return errors.New("cycle: " + strings.Join(cycle, " -> "))
+		}
 		return errors.New("dependency cycle detected")
 	}
 
@@ -109,4 +119,77 @@ func runBatch(r Runner, batch []TaskName, maxWorkers int) error {
 	wg.Wait()
 
 	return firstErr
+}
+
+func sortTaskNames(names []TaskName) {
+	sort.Slice(names, func(i, j int) bool {
+		return names[i] < names[j]
+	})
+}
+
+func detectCycle(deps map[TaskName][]TaskName) []string {
+	const (
+		unvisited = iota
+		visiting
+		done
+	)
+
+	state := map[TaskName]int{}
+	stack := []TaskName{}
+
+	var dfs func(TaskName) []string
+	dfs = func(n TaskName) []string {
+		state[n] = visiting
+		stack = append(stack, n)
+
+		for _, d := range deps[n] {
+			if state[d] == visiting {
+				return buildCycle(stack, d)
+			}
+			if state[d] == unvisited {
+				if cycle := dfs(d); len(cycle) > 0 {
+					return cycle
+				}
+			}
+		}
+
+		stack = stack[:len(stack)-1]
+		state[n] = done
+		return nil
+	}
+
+	nodes := make([]TaskName, 0, len(deps))
+	for n := range deps {
+		nodes = append(nodes, n)
+	}
+	sortTaskNames(nodes)
+
+	for _, n := range nodes {
+		if state[n] == unvisited {
+			if cycle := dfs(n); len(cycle) > 0 {
+				return cycle
+			}
+		}
+	}
+
+	return nil
+}
+
+func buildCycle(stack []TaskName, target TaskName) []string {
+	idx := -1
+	for i := len(stack) - 1; i >= 0; i-- {
+		if stack[i] == target {
+			idx = i
+			break
+		}
+	}
+	if idx == -1 {
+		return []string{string(target), string(target)}
+	}
+	cycle := make([]string, 0, len(stack)-idx+1)
+	for _, n := range stack[idx:] {
+		cycle = append(cycle, string(n))
+	}
+	cycle = append(cycle, string(target))
+	return cycle
 }

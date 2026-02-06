@@ -100,8 +100,8 @@ func (e *Engine) subscribe() {
 
 			attrs, _ := ev.Fields["attrs"].([]any)
 			if e.opt.LogFormat == log.TextFormatter {
-				if errStr, ok := attrString(attrs, "error"); ok && strings.Contains(errStr, "\n") {
-					fmt.Fprintln(os.Stderr, errStr)
+				if multi, ok := attrStringAny(attrs, "error", "output"); ok && strings.Contains(multi, "\n") {
+					fmt.Fprintln(os.Stderr, multi)
 					return
 				}
 			}
@@ -120,10 +120,10 @@ func (e *Engine) subscribe() {
 	})
 }
 
-func attrString(attrs []any, key string) (string, bool) {
+func attrStringAny(attrs []any, keys ...string) (string, bool) {
 	for i := 0; i+1 < len(attrs); i += 2 {
 		k, ok := attrs[i].(string)
-		if !ok || k != key {
+		if !ok || !stringInSlice(k, keys) {
 			continue
 		}
 
@@ -135,6 +135,15 @@ func attrString(attrs []any, key string) (string, bool) {
 	}
 
 	return "", false
+}
+
+func stringInSlice(s string, list []string) bool {
+	for _, v := range list {
+		if v == s {
+			return true
+		}
+	}
+	return false
 }
 
 func (e *Engine) registerDSL() {
