@@ -7,6 +7,7 @@ import (
 	"errors"
 	"os"
 	"os/exec"
+	"path"
 	"path/filepath"
 	"strings"
 	"time"
@@ -288,8 +289,13 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 		return c.luaRsyncError(L, err)
 	}
 
-	log.Debugf("executing: rsync -az --delete %s %s", resolvedSrc, resolvedDst)
-	cmd := exec.CommandContext(context.Background(), "rsync", "-az", "--delete", resolvedSrc, resolvedDst)
+	args := []string{"-az", "--delete"}
+	if rsyncPath := rsyncPathWithMkdir(resolvedDst); rsyncPath != "" {
+		args = append(args, "--rsync-path", rsyncPath)
+	}
+	args = append(args, resolvedSrc, resolvedDst)
+	log.Debugf("executing: rsync %s", strings.Join(args, " "))
+	cmd := exec.CommandContext(context.Background(), "rsync", args...)
 
 	var stdout, stderr bytes.Buffer
 
@@ -408,4 +414,18 @@ func splitHostPath(path string) (string, string, bool) {
 	}
 
 	return parts[0], parts[1], true
+}
+
+func rsyncPathWithMkdir(dst string) string {
+	_, remotePath, ok := splitHostPath(dst)
+	if !ok {
+		return ""
+	}
+
+	dir := path.Dir(remotePath)
+	if dir == "." || dir == "/" || dir == "" {
+		return ""
+	}
+
+	return "mkdir -p " + shellQuotePosix(dir) + " && rsync"
 }
