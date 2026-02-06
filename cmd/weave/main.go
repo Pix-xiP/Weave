@@ -20,7 +20,7 @@ func main() {
 		Flags(func(f *flag.FlagSet) {
 			f.String("f", "Weavefile.lua", "path to Weavefile")
 			f.String("log-level", "info", "set the log level [debug|info|warn|error]")
-			f.String("log-format", "json", "set the log format [json|text]")
+			f.String("log-format", "text", "set the log format [json|text]")
 			f.Bool("dry-run", false, "emit events without executing operations")
 			f.Int("workers", 2, "max parallel tasks to run")
 

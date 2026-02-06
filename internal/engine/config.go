@@ -17,6 +17,7 @@ type Config struct {
 
 func loadConfigFrom(L *lua.LState) (Config, error) {
 	cfg := Config{}
+
 	lv := L.GetGlobal("config")
 	if lv == lua.LNil {
 		return cfg, nil

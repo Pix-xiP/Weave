@@ -6,6 +6,7 @@ import (
 	"io"
 	"os"
 	"sort"
+	"strings"
 	"time"
 
 	"github.com/charmbracelet/log"
@@ -24,11 +25,12 @@ type Options struct {
 }
 
 type Engine struct {
-	opt   Options
-	bus   *events.Bus
-	L     *lua.LState
-	tasks map[string]taskDef
-	cfg   Config
+	opt     Options
+	bus     *events.Bus
+	L       *lua.LState
+	tasks   map[string]taskDef
+	cfg     Config
+	spinner *spinnerRenderer
 }
 
 type taskDef struct {
@@ -52,6 +54,10 @@ func New(opts Options) *Engine {
 		L:     lua.NewState(),
 		tasks: make(map[string]taskDef),
 	}
+	if !opts.Quiet && opts.LogFormat == log.TextFormatter {
+		e.spinner = newSpinnerRenderer(os.Stderr)
+	}
+
 	e.registerDSL()
 	e.subscribe()
 
@@ -65,37 +71,70 @@ func (e *Engine) Close() {
 }
 
 func (e *Engine) subscribe() {
-	e.bus.Subscribe(func(e events.Event) {
-		switch e.Type {
+	e.bus.Subscribe(func(ev events.Event) {
+		switch ev.Type {
 		case events.TaskStart:
-			log.Debug("task start", "task", e.Task)
+			log.Debug("task start", "task", ev.Task)
 		case events.TaskEnd:
-			log.Debug("task end", "task", e.Task, "ok", e.Fields["ok"])
+			log.Debug("task end", "task", ev.Task, "ok", ev.Fields["ok"])
 		case events.OpStart:
-			log.Debug("op start", "task", e.Task, "op", e.Fields["op"], "host", e.Fields["host"])
+			log.Debug("op start", "task", ev.Task, "op", ev.Fields["op"], "host", ev.Fields["host"])
+
+			if e.spinner != nil {
+				e.spinner.Handle(ev)
+			}
 		case events.OpEnd:
 			log.Debug("op end",
-				"task", e.Task,
-				"op", e.Fields["op"],
-				"ok", e.Fields["ok"],
-				"code", e.Fields["code"],
-				"duration_ms", e.Fields["duration_ms"],
+				"task", ev.Task,
+				"op", ev.Fields["op"],
+				"ok", ev.Fields["ok"],
+				"code", ev.Fields["code"],
+				"duration_ms", ev.Fields["duration_ms"],
 			)
+
+			if e.spinner != nil {
+				e.spinner.Handle(ev)
+			}
 		case events.Message:
 			l := log.WithPrefix("LUA")
 
-			switch e.Fields["level"] {
+			attrs, _ := ev.Fields["attrs"].([]any)
+			if e.opt.LogFormat == log.TextFormatter {
+				if errStr, ok := attrString(attrs, "error"); ok && strings.Contains(errStr, "\n") {
+					fmt.Fprintln(os.Stderr, errStr)
+					return
+				}
+			}
+
+			switch ev.Fields["level"] {
 			case "debug":
-				l.Debug(e.Fields["msg"], e.Fields["attrs"].([]any)...)
+				l.Debug(ev.Fields["msg"], attrs...)
 			case "warn":
-				l.Warn(e.Fields["msg"], e.Fields["attrs"].([]any)...)
+				l.Warn(ev.Fields["msg"], attrs...)
 			case "error":
-				l.Error(e.Fields["msg"], e.Fields["attrs"].([]any)...)
+				l.Error(ev.Fields["msg"], attrs...)
 			default:
-				l.Info(e.Fields["msg"], e.Fields["attrs"].([]any)...)
+				l.Info(ev.Fields["msg"], attrs...)
 			}
 		}
 	})
+}
+
+func attrString(attrs []any, key string) (string, bool) {
+	for i := 0; i+1 < len(attrs); i += 2 {
+		k, ok := attrs[i].(string)
+		if !ok || k != key {
+			continue
+		}
+
+		if v, ok := attrs[i+1].(string); ok {
+			return v, true
+		}
+
+		return "", false
+	}
+
+	return "", false
 }
 
 func (e *Engine) registerDSL() {

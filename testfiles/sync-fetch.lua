@@ -23,3 +23,12 @@ task("fetch-test", { depends = { "sync-test" } }, function(ctx)
 		return
 	end
 end)
+
+task("big-sync", function(ctx)
+	ctx:log("info", "running big sync test command", { host = config.hosts.server.addr })
+	ctx:run("dd if=/dev/urandom of=./bigfile bs=1M count=500")
+	ctx:sync("./bigfile", "server:/home/pix/AdeptusCustodes/Lunar/Weave/bigfile_copy")
+	ctx:run("rm ./bigfile")
+	ctx:run("server", "rm /home/pix/AdeptusCustodes/Lunar/Weave/bigfile_copy")
+	ctx:notify("Sync Done", "Bigfile Sync completed")
+end)

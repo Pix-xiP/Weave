@@ -6,6 +6,7 @@ end)
 
 task("rebuild", function(ctx)
 	ctx:run("cp weave weave.old")
+
 	local r = ctx:run("go build -o weave ./cmd/weave/main.go")
 	if not r.ok then
 		ctx:run("mv weave.old weave")
@@ -13,7 +14,6 @@ task("rebuild", function(ctx)
 		ctx:log("error", "output", { error = r.err })
 	else
 		ctx:run("rm weave.old")
-		ctx:log("info", "weave rebuilt")
 	end
 
 	ctx:notify("Weave Rebuild", "weave has finished running rebuild")
