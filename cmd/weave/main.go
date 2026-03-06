@@ -9,7 +9,6 @@ import (
 
 	"github.com/charmbracelet/log"
 	"github.com/pix-xip/go-command"
-
 	"github.com/pix-xip/weave/internal/engine"
 )
 
@@ -28,7 +27,10 @@ func main() {
 			f.Bool("debug", false, "enable debug mode")
 		})
 
-	r.Action(Start)
+	r.Action(cmdListTasks)
+
+	r.SubCommand("tasks").Action(cmdListTasks).Help("Lists all tasks in the Weavefile")
+	r.SubCommand("run").Action(cmdRunTask).Help("Run a specific weave task")
 
 	r.SubCommand("version").Help("Prints the version").
 		Action(func(ctx context.Context, fs *flag.FlagSet, args []string) error {
@@ -74,7 +76,7 @@ func makeOpts(fs *flag.FlagSet) (engine.Options, error) {
 	}, nil
 }
 
-func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
+func cmdListTasks(ctx context.Context, fs *flag.FlagSet, args []string) error {
 	opts, err := makeOpts(fs)
 	if err != nil {
 		return err
@@ -82,36 +84,41 @@ func Start(ctx context.Context, fs *flag.FlagSet, args []string) error {
 
 	eng := engine.New(opts)
 
-	if len(args) == 0 {
-		fs.Usage()
-		os.Exit(0)
+	if err := eng.Load(); err != nil {
+		return fmt.Errorf("load error: %w", err)
 	}
 
-	switch args[0] {
-	case "tasks":
-		if err := eng.Load(); err != nil {
-			return fmt.Errorf("load error: %w", err)
-		}
+	fmt.Println("Weavefile Tasks:")
 
-		for _, name := range eng.TaskNames() {
-			fmt.Println(name)
-		}
-	case "run":
-		if len(args) < 2 {
-			return errors.New("missing task name")
-		}
+	for name, help := range eng.TaskNamesWithHelp() {
+		fmt.Printf("  - %s:\t%v\n", name, help)
+	}
 
-		taskName := args[1]
+	fmt.Println()
 
-		if err := eng.Load(); err != nil {
-			return fmt.Errorf("load error: %w", err)
-		}
+	return nil
+}
 
-		if err := eng.Run(taskName); err != nil {
-			return fmt.Errorf("run error: %w", err)
-		}
-	default:
-		return fmt.Errorf("unknown command: %s", args[0])
+func cmdRunTask(ctx context.Context, fs *flag.FlagSet, args []string) error {
+	opts, err := makeOpts(fs)
+	if err != nil {
+		return err
+	}
+
+	eng := engine.New(opts)
+
+	if err := eng.Load(); err != nil {
+		return fmt.Errorf("load error: %w", err)
+	}
+
+	if len(args) < 1 {
+		return errors.New("missing task name")
+	}
+
+	taskName := args[0]
+
+	if err := eng.Run(taskName); err != nil {
+		return fmt.Errorf("run error: %w", err)
 	}
 
 	return nil

@@ -1,10 +1,10 @@
 -- This is a Weavefile for use with the `weave` tool.
-task("build", { depends = { "test" } }, function(ctx)
+task("build", { depends = { "test" }, help = "Builds and tests 'weave'." }, function(ctx)
 	ctx:run("go build -o weave ./cmd/weave/main.go")
 	ctx:notify("Weave", "weave has finished running build")
 end)
 
-task("rebuild", { depends = { "test" } }, function(ctx)
+task("rebuild", { depends = { "test" }, help = "Rebuilds weave, then tests it." }, function(ctx)
 	ctx:run("cp weave weave.old")
 
 	local r = ctx:run("go build -o weave ./cmd/weave/main.go")
@@ -19,7 +19,7 @@ task("rebuild", { depends = { "test" } }, function(ctx)
 	ctx:notify("Weave", "weave has finished running rebuild")
 end)
 
-task("test", function(ctx)
+task("test", { help = "Tests 'weave'." }, function(ctx)
 	local r = ctx:run("go test ./...")
 	if not r.ok then
 		ctx:log("error", "weave tests failed")

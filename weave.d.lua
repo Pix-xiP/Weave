@@ -7,7 +7,7 @@
 ---@field notify fun(self: WeaveCtx, title: string, message: string): nil
 
 ---@alias TaskFn fun(ctx: WeaveCtx): nil
----@alias TaskOpts { depends?: string[] }
+---@alias TaskOpts { depends?: string[], help?: string}
 
 ---@overload fun(name: string, fn: TaskFn)
 ---@overload fun(name: string, opts: TaskOpts, fn: TaskFn)

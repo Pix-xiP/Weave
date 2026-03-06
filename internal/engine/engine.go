@@ -36,6 +36,7 @@ type Engine struct {
 type taskDef struct {
 	fn   *lua.LFunction
 	deps []string
+	help string
 }
 
 func New(opts Options) *Engine {
@@ -181,7 +182,13 @@ func registerDSLWithTasks(L *lua.LState, tasks map[string]taskDef) {
 			return 1
 		}
 
-		tasks[name] = taskDef{fn: fn, deps: deps}
+		help, err := parseTaskHelp(opts)
+		if err != nil {
+			L.ArgError(2, err.Error())
+			return 1
+		}
+
+		tasks[name] = taskDef{fn: fn, deps: deps, help: help}
 
 		return 0
 	}))
@@ -205,6 +212,15 @@ func (e *Engine) Load() error {
 	e.cfg = cfg
 
 	return nil
+}
+
+func (e *Engine) TaskNamesWithHelp() map[string]string {
+	out := make(map[string]string, len(e.tasks))
+	for k, v := range e.tasks {
+		out[k] = v.help
+	}
+
+	return out
 }
 
 func (e *Engine) TaskNames() []string {
@@ -372,4 +388,22 @@ func parseTaskDeps(opts *lua.LTable) ([]string, error) {
 	}
 
 	return deps, nil
+}
+
+func parseTaskHelp(opts *lua.LTable) (string, error) {
+	if opts == nil {
+		return "", nil
+	}
+
+	lv := opts.RawGetString("help")
+	if lv == lua.LNil {
+		return "", nil
+	}
+
+	s, ok := lv.(lua.LString)
+	if !ok {
+		return "", errors.New("help must be a string")
+	}
+
+	return string(s), nil
 }

@@ -137,8 +137,7 @@ func (c *Ctx) luaRun(L *lua.LState) int {
 
 	if err != nil {
 		// best-effort exit code extraction:
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
+		if ee, ok := errors.AsType[*exec.ExitError](err); ok {
 			code = ee.ExitCode()
 		} else {
 			code = 1
@@ -293,6 +292,7 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 	if rsyncPath := rsyncPathWithMkdir(resolvedDst); rsyncPath != "" {
 		args = append(args, "--rsync-path", rsyncPath)
 	}
+
 	args = append(args, resolvedSrc, resolvedDst)
 	log.Debugf("executing: rsync %s", strings.Join(args, " "))
 	cmd := exec.CommandContext(context.Background(), "rsync", args...)
@@ -306,8 +306,7 @@ func (c *Ctx) luaRsync(L *lua.LState, op, src, dst string) int {
 	code := 0
 
 	if err != nil {
-		var ee *exec.ExitError
-		if errors.As(err, &ee) {
+		if ee, ok := errors.AsType[*exec.ExitError](err); ok {
 			code = ee.ExitCode()
 		} else {
 			code = 1
@@ -372,27 +371,27 @@ func ensureLocalDest(dst string) error {
 	return mkdirAll(parent)
 }
 
-func isRemoteSpec(path string) bool {
-	return strings.Contains(path, ":")
+func isRemoteSpec(pathstr string) bool {
+	return strings.Contains(pathstr, ":")
 }
 
-func mkdirAll(path string) error {
-	if path == "" {
+func mkdirAll(dirpath string) error {
+	if dirpath == "" {
 		return nil
 	}
 
-	return os.MkdirAll(path, 0o750)
+	return os.MkdirAll(dirpath, 0o750)
 }
 
-func (c *Ctx) resolveRsyncPath(path string) (string, error) {
-	host, remotePath, ok := splitHostPath(path)
+func (c *Ctx) resolveRsyncPath(rpath string) (string, error) {
+	host, remotePath, ok := splitHostPath(rpath)
 	if !ok {
-		return path, nil
+		return rpath, nil
 	}
 
 	hostCfg, ok := c.cfg.Hosts[host]
 	if !ok {
-		return path, nil
+		return rpath, nil
 	}
 
 	target := hostCfg.Addr
@@ -403,8 +402,8 @@ func (c *Ctx) resolveRsyncPath(path string) (string, error) {
 	return target + ":" + remotePath, nil
 }
 
-func splitHostPath(path string) (string, string, bool) {
-	parts := strings.SplitN(path, ":", 2)
+func splitHostPath(hpath string) (string, string, bool) {
+	parts := strings.SplitN(hpath, ":", 2)
 	if len(parts) != 2 {
 		return "", "", false
 	}

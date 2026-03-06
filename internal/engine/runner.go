@@ -2,7 +2,7 @@ package engine
 
 import (
 	"errors"
-	"sort"
+	"slices"
 	"strings"
 	"sync"
 )
@@ -31,8 +31,9 @@ func RunGraphParallel(r Runner, deps map[TaskName][]TaskName, maxWorkers int) er
 			dependents[d] = append(dependents[d], t)
 		}
 	}
+
 	for d := range dependents {
-		sortTaskNames(dependents[d])
+		slices.Sort(dependents[d])
 	}
 
 	for t := range all {
@@ -47,7 +48,8 @@ func RunGraphParallel(r Runner, deps map[TaskName][]TaskName, maxWorkers int) er
 			ready = append(ready, t)
 		}
 	}
-	sortTaskNames(ready)
+
+	slices.Sort(ready)
 
 	processed := 0
 
@@ -68,13 +70,15 @@ func RunGraphParallel(r Runner, deps map[TaskName][]TaskName, maxWorkers int) er
 				}
 			}
 		}
-		sortTaskNames(ready)
+
+		slices.Sort(ready)
 	}
 
 	if processed != len(all) {
 		if cycle := detectCycle(deps); len(cycle) > 0 {
 			return errors.New("cycle: " + strings.Join(cycle, " -> "))
 		}
+
 		return errors.New("dependency cycle detected")
 	}
 
@@ -121,12 +125,6 @@ func runBatch(r Runner, batch []TaskName, maxWorkers int) error {
 	return firstErr
 }
 
-func sortTaskNames(names []TaskName) {
-	sort.Slice(names, func(i, j int) bool {
-		return names[i] < names[j]
-	})
-}
-
 func detectCycle(deps map[TaskName][]TaskName) []string {
 	const (
 		unvisited = iota
@@ -138,6 +136,7 @@ func detectCycle(deps map[TaskName][]TaskName) []string {
 	stack := []TaskName{}
 
 	var dfs func(TaskName) []string
+
 	dfs = func(n TaskName) []string {
 		state[n] = visiting
 		stack = append(stack, n)
@@ -146,6 +145,7 @@ func detectCycle(deps map[TaskName][]TaskName) []string {
 			if state[d] == visiting {
 				return buildCycle(stack, d)
 			}
+
 			if state[d] == unvisited {
 				if cycle := dfs(d); len(cycle) > 0 {
 					return cycle
@@ -155,6 +155,7 @@ func detectCycle(deps map[TaskName][]TaskName) []string {
 
 		stack = stack[:len(stack)-1]
 		state[n] = done
+
 		return nil
 	}
 
@@ -162,7 +163,8 @@ func detectCycle(deps map[TaskName][]TaskName) []string {
 	for n := range deps {
 		nodes = append(nodes, n)
 	}
-	sortTaskNames(nodes)
+
+	slices.Sort(nodes)
 
 	for _, n := range nodes {
 		if state[n] == unvisited {
@@ -177,19 +179,24 @@ func detectCycle(deps map[TaskName][]TaskName) []string {
 
 func buildCycle(stack []TaskName, target TaskName) []string {
 	idx := -1
+
 	for i := len(stack) - 1; i >= 0; i-- {
 		if stack[i] == target {
 			idx = i
 			break
 		}
 	}
+
 	if idx == -1 {
 		return []string{string(target), string(target)}
 	}
+
 	cycle := make([]string, 0, len(stack)-idx+1)
 	for _, n := range stack[idx:] {
 		cycle = append(cycle, string(n))
 	}
+
 	cycle = append(cycle, string(target))
+
 	return cycle
 }
